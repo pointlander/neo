@@ -124,20 +124,19 @@ func EuclideanReal(k tf64.Continuation, node int, a, b *tf64.V, options ...map[s
 	return false
 }
 
-// QR is a real model
-type QR struct {
+// Neuron is a neuromorphic neuron
+type Neuron struct {
 	Iteration int
 	Rng       *rand.Rand
 	Set       *tf64.Set
 }
 
-// NewQG creates a new real model
-func NewQR(rows, cols int) QR {
-	rng := rand.New(rand.NewSource(1))
+// Neuron creates a new neuron
+func NewQR(seed int64, rows, cols int) Neuron {
+	rng := rand.New(rand.NewSource(seed))
 
 	set := tf64.NewSet()
 	set.Add("x", 2, rows)
-	set.Add("y", 2, rows)
 
 	for ii := range set.Weights {
 		w := set.Weights[ii]
@@ -159,31 +158,31 @@ func NewQR(rows, cols int) QR {
 		}
 	}
 
-	return QR{
+	return Neuron{
 		Rng: rng,
 		Set: &set,
 	}
 }
 
-// Iterate iterates the g model
-func (q *QR) Iterate(iterations int) {
+// Iterate iterates the neuron
+func (n *Neuron) Iterate(iterations int, y *tf64.Set) [4]int {
 	const Eta = 1e-1
 	drop := .3
 	dropout := map[string]interface{}{
-		"rng":  q.Rng,
+		"rng":  n.Rng,
 		"drop": &drop,
 	}
 
 	euclidean := tf64.B(EuclideanReal)
 
-	l0 := tf64.Mul(tf64.Dropout(tf64.Square(q.Set.Get("y")), dropout),
-		tf64.Inv(euclidean(q.Set.Get("x"), q.Set.Get("x"))))
-	loss := tf64.Avg(tf64.Quadratic(tf64.Mul(tf64.Dropout(tf64.Square(q.Set.Get("x")), dropout),
-		tf64.Inv(euclidean(q.Set.Get("y"), q.Set.Get("y")))), l0))
+	l0 := tf64.Mul(tf64.Dropout(tf64.Square(y.Get("x")), dropout),
+		tf64.Inv(euclidean(n.Set.Get("x"), n.Set.Get("x"))))
+	loss := tf64.Avg(tf64.Quadratic(tf64.Mul(tf64.Dropout(tf64.Square(n.Set.Get("x")), dropout),
+		tf64.Inv(euclidean(y.Get("x"), y.Get("x")))), l0))
 
 	var l float64
 	for range iterations {
-		iteration := q.Iteration
+		iteration := n.Iteration
 		pow := func(x float64) float64 {
 			y := math.Pow(x, float64(iteration+1))
 			if math.IsNaN(y) || math.IsInf(y, 0) {
@@ -192,15 +191,16 @@ func (q *QR) Iterate(iterations int) {
 			return y
 		}
 
-		q.Set.Zero()
+		n.Set.Zero()
+		y.Zero()
 		l = tf64.Gradient(loss).X[0]
 		if math.IsNaN(l) || math.IsInf(l, 0) {
 			fmt.Println(iteration, l)
-			return
+			return [4]int{}
 		}
 
 		norm := 0.0
-		for _, p := range q.Set.Weights {
+		for _, p := range n.Set.Weights {
 			for _, d := range p.D {
 				norm += d * d
 			}
@@ -211,7 +211,7 @@ func (q *QR) Iterate(iterations int) {
 		if norm > 1 {
 			scaling = 1 / norm
 		}
-		for _, w := range q.Set.Weights {
+		for _, w := range n.Set.Weights {
 			for ii, d := range w.D {
 				g := d * scaling
 				m := B1*w.States[StateM][ii] + (1-B1)*g
@@ -226,11 +226,11 @@ func (q *QR) Iterate(iterations int) {
 				w.X[ii] -= Eta * mhat / (math.Sqrt(vhat) + 1e-8)
 			}
 		}
-		q.Iteration++
+		n.Iteration++
 	}
 	fmt.Println(l)
 
-	x := q.Set.ByName["x"]
+	x := n.Set.ByName["x"]
 	minX, maxX, minY, maxY := math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
 	for i := range x.S[1] {
 		x, y := x.X[i*x.S[0]], x.X[i*x.S[0]+1]
@@ -261,38 +261,7 @@ func (q *QR) Iterate(iterations int) {
 			counts[3]++
 		}
 	}
-
-	y := q.Set.ByName["y"]
-	minX, maxX, minY, maxY = math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
-	for i := range y.S[1] {
-		x, y := y.X[i*y.S[0]], y.X[i*y.S[0]+1]
-		if x < minX {
-			minX = x
-		}
-		if x > maxX {
-			maxX = x
-		}
-		if y < minY {
-			minY = y
-		}
-		if y > maxY {
-			maxY = y
-		}
-	}
-	halfX, halfY = (maxX-minX)/2, (maxY-minY)/2
-	counts = [4]int{}
-	for i := range y.S[1] {
-		x, y := y.X[i*y.S[0]], y.X[i*y.S[0]+1]
-		if x < minX+halfX && y < minY+halfY {
-			counts[0]++
-		} else if x > minX+halfX && x < maxX && y < minY+halfY {
-			counts[1]++
-		} else if x < minX+halfX && y > minY+halfY && y < maxY {
-			counts[2]++
-		} else {
-			counts[3]++
-		}
-	}
+	return counts
 }
 
 func main() {
