@@ -7,10 +7,12 @@ package main
 import (
 	"compress/bzip2"
 	"embed"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"math"
 	"math/rand"
+	"os"
 	"strings"
 
 	"github.com/pointlander/gradient/tf64"
@@ -127,8 +129,8 @@ func EuclideanReal(k tf64.Continuation, node int, a, b *tf64.V, options ...map[s
 // Neuron is a neuromorphic neuron
 type Neuron struct {
 	Iteration int
-	Rng       *rand.Rand
 	Set       *tf64.Set
+	rng       *rand.Rand
 }
 
 // NewNeuron creates a new neuron
@@ -159,7 +161,7 @@ func NewNeuron(seed int64, rows, cols int) Neuron {
 	}
 
 	return Neuron{
-		Rng: rng,
+		rng: rng,
 		Set: &set,
 	}
 }
@@ -169,7 +171,7 @@ func (n *Neuron) Iterate(iterations int, y *tf64.Set) {
 	const Eta = 1e-1
 	drop := .3
 	dropout := map[string]interface{}{
-		"rng":  n.Rng,
+		"rng":  n.rng,
 		"drop": &drop,
 	}
 
@@ -274,7 +276,7 @@ func main() {
 	for i := range neurons {
 		neurons[i] = NewNeuron(int64(i+1), 33, 33)
 	}
-	for _, symbol := range books[0].Text[:1024] {
+	for _, symbol := range books[0].Text[:8*1024] {
 		x, y := int(symbol), 0
 		for range 1024 {
 			nextX, nextY := x, y
@@ -331,5 +333,15 @@ func main() {
 	}
 	for key, value := range distribution {
 		fmt.Println(key, value)
+	}
+	output, err := os.Create("network.gob")
+	if err != nil {
+		panic(err)
+	}
+	defer output.Close()
+	encoder := gob.NewEncoder(output)
+	err = encoder.Encode(neurons)
+	if err != nil {
+		panic(err)
 	}
 }
