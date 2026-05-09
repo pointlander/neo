@@ -165,7 +165,7 @@ func NewNeuron(seed int64, rows, cols int) Neuron {
 }
 
 // Iterate iterates the neuron
-func (n *Neuron) Iterate(iterations int, y *tf64.Set) [4]int {
+func (n *Neuron) Iterate(iterations int, y *tf64.Set) {
 	const Eta = 1e-1
 	drop := .3
 	dropout := map[string]interface{}{
@@ -196,7 +196,7 @@ func (n *Neuron) Iterate(iterations int, y *tf64.Set) [4]int {
 		l = tf64.Gradient(loss).X[0]
 		if math.IsNaN(l) || math.IsInf(l, 0) {
 			fmt.Println(iteration, l)
-			return [4]int{}
+			return
 		}
 
 		norm := 0.0
@@ -229,7 +229,10 @@ func (n *Neuron) Iterate(iterations int, y *tf64.Set) [4]int {
 		n.Iteration++
 	}
 	//fmt.Println(l)
+}
 
+// Histogram returns the histogram for the neuron
+func (n *Neuron) Histogram() [4]int {
 	x := n.Set.ByName["x"]
 	minX, maxX, minY, maxY := math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
 	for i := range x.S[1] {
@@ -274,51 +277,57 @@ func main() {
 	for _, symbol := range books[0].Text[:1024] {
 		x, y := int(symbol), 0
 		for range 1024 {
-			histogram := neurons[((y+1)%8)*256+x].Iterate(1, neurons[y*256+x].Set)
+			nextX, nextY := x, y
 			total, selected := 0, rng.Intn(33)
+			histogram := neurons[y*256+x].Histogram()
 			for i, value := range histogram {
 				total += value
 				if selected < total {
 					switch i {
 					case 0:
-						y = (y + 1) % 8
+						nextY = (y + 1) % 8
 					case 1:
-						x = (x + 1) % 256
+						nextX = (x + 1) % 256
 					case 2:
-						y = (y + 8 - 1) % 8
+						nextY = (y + 8 - 1) % 8
 					case 3:
-						x = (x + 256 - 1) % 256
+						nextX = (x + 256 - 1) % 256
 					}
 					break
 				}
 			}
+			neurons[y*256+x].Iterate(1, neurons[nextY*256+nextX].Set)
+			x, y = nextX, nextY
 		}
 		fmt.Printf("%c", symbol)
 	}
 	distribution := make([]int, 256)
 	x, y := int('G'), 0
 	for range 1024 {
-		histogram := neurons[((y+1)%8)*256+x].Iterate(1, neurons[y*256+x].Set)
+		nextX, nextY := x, y
 		total, selected := 0, rng.Intn(33)
+		histogram := neurons[y*256+x].Histogram()
 		for i, value := range histogram {
 			total += value
 			if selected < total {
 				switch i {
 				case 0:
-					y = (y + 1) % 8
+					nextY = (y + 1) % 8
 				case 1:
-					x = (x + 1) % 256
+					nextX = (x + 1) % 256
 				case 2:
-					y = (y + 8 - 1) % 8
+					nextY = (y + 8 - 1) % 8
 				case 3:
-					x = (x + 256 - 1) % 256
+					nextX = (x + 256 - 1) % 256
 				}
 				break
 			}
 		}
-		if y == 0 {
-			distribution[x]++
+		if nextY == 0 {
+			distribution[nextX]++
 		}
+		neurons[y*256+x].Iterate(1, neurons[nextY*256+nextX].Set)
+		x, y = nextX, nextY
 	}
 	for key, value := range distribution {
 		fmt.Println(key, value)
