@@ -131,8 +131,8 @@ type Neuron struct {
 	Set       *tf64.Set
 }
 
-// Neuron creates a new neuron
-func NewQR(seed int64, rows, cols int) Neuron {
+// NewNeuron creates a new neuron
+func NewNeuron(seed int64, rows, cols int) Neuron {
 	rng := rand.New(rand.NewSource(seed))
 
 	set := tf64.NewSet()
@@ -228,7 +228,7 @@ func (n *Neuron) Iterate(iterations int, y *tf64.Set) [4]int {
 		}
 		n.Iteration++
 	}
-	fmt.Println(l)
+	//fmt.Println(l)
 
 	x := n.Set.ByName["x"]
 	minX, maxX, minY, maxY := math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64
@@ -265,5 +265,62 @@ func (n *Neuron) Iterate(iterations int, y *tf64.Set) [4]int {
 }
 
 func main() {
-	LoadBooks()
+	rng := rand.New(rand.NewSource(1))
+	books := LoadBooks()
+	neurons := make([]Neuron, 256*8)
+	for i := range neurons {
+		neurons[i] = NewNeuron(int64(i+1), 33, 33)
+	}
+	for _, symbol := range books[0].Text[:1024] {
+		x, y := int(symbol), 0
+		for range 1024 {
+			histogram := neurons[((y+1)%8)*256+x].Iterate(1, neurons[y*256+x].Set)
+			total, selected := 0, rng.Intn(33)
+			for i, value := range histogram {
+				total += value
+				if selected < total {
+					switch i {
+					case 0:
+						y = (y + 1) % 8
+					case 1:
+						x = (x + 1) % 256
+					case 2:
+						y = (y + 8 - 1) % 8
+					case 3:
+						x = (x + 256 - 1) % 256
+					}
+					break
+				}
+			}
+		}
+		fmt.Printf("%c", symbol)
+	}
+	distribution := make([]int, 256)
+	x, y := int('G'), 0
+	for range 1024 {
+		histogram := neurons[((y+1)%8)*256+x].Iterate(1, neurons[y*256+x].Set)
+		total, selected := 0, rng.Intn(33)
+		for i, value := range histogram {
+			total += value
+			if selected < total {
+				switch i {
+				case 0:
+					y = (y + 1) % 8
+				case 1:
+					x = (x + 1) % 256
+				case 2:
+					y = (y + 8 - 1) % 8
+				case 3:
+					x = (x + 256 - 1) % 256
+				}
+				break
+			}
+		}
+		if y == 0 {
+			distribution[x]++
+		}
+	}
+	for key, value := range distribution {
+		fmt.Println(key, value)
+	}
 }
