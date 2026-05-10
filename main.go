@@ -8,6 +8,7 @@ import (
 	"compress/bzip2"
 	"embed"
 	"encoding/gob"
+	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -269,7 +270,71 @@ func (n *Neuron) Histogram() [4]int {
 	return counts
 }
 
+var (
+	// FlagInfer inference mode
+	FlagInfer = flag.String("infer", "", "inference mode")
+)
+
 func main() {
+	flag.Parse()
+
+	if *FlagInfer != "" {
+		rng := rand.New(rand.NewSource(1))
+		input, err := os.Open(*FlagInfer)
+		if err != nil {
+			panic(err)
+		}
+		defer input.Close()
+		decoder := gob.NewDecoder(input)
+		var neurons []Neuron
+		err = decoder.Decode(&neurons)
+		if err != nil {
+			panic(err)
+		}
+		for i := range neurons {
+			neurons[i].rng = rand.New(rand.NewSource(int64(i + 1)))
+		}
+
+		infer := func(in byte) {
+			fmt.Println("----------------------------------------")
+			distribution := make([]int, 256)
+			x, y := int(in), 0
+			for range 1024 {
+				nextX, nextY := x, y
+				total, selected := 0, rng.Intn(33)
+				histogram := neurons[y*256+x].Histogram()
+				for i, value := range histogram {
+					total += value
+					if selected < total {
+						switch i {
+						case 0:
+							nextY = (y + 1) % 8
+						case 1:
+							nextX = (x + 1) % 256
+						case 2:
+							nextY = (y + 8 - 1) % 8
+						case 3:
+							nextX = (x + 256 - 1) % 256
+						}
+						break
+					}
+				}
+				if nextY == 0 {
+					distribution[nextX]++
+				}
+				neurons[y*256+x].Iterate(1, neurons[nextY*256+nextX].Set)
+				x, y = nextX, nextY
+			}
+			for key, value := range distribution {
+				fmt.Printf("%3d%9q%3d\n", key, key, value)
+			}
+		}
+		infer(' ')
+		infer('g')
+		infer('o')
+		return
+	}
+
 	rng := rand.New(rand.NewSource(1))
 	books := LoadBooks()
 	neurons := make([]Neuron, 256*8)
