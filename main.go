@@ -17,6 +17,11 @@ import (
 	"strings"
 
 	"github.com/pointlander/gradient/tf64"
+
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
+	"gonum.org/v1/plot/vg/draw"
 )
 
 const (
@@ -317,6 +322,8 @@ func (n Network) SaveNetwork(file string) {
 var (
 	// FlagInfer inference mode
 	FlagInfer = flag.String("infer", "", "inference mode")
+	// FlagObjective objective learning mode
+	FlagObjective = flag.Bool("objective", false, "objective mode")
 )
 
 func main() {
@@ -368,6 +375,63 @@ func main() {
 	rng := rand.New(rand.NewSource(1))
 	books := LoadBooks()
 	neurons := NewNetwork(256 * 8)
+	if *FlagObjective {
+		previous := byte(0)
+		length := make(plotter.XYs, 0, 8)
+		for i, symbol := range books[0].Text[:2*1024] {
+			x, y, count := int(previous), 0, 0
+			for byte(x) != symbol {
+				nextX, nextY := x, y
+				total, selected := 0, rng.Intn(33)
+				histogram := neurons[y*256+x].Histogram()
+				for i, value := range histogram {
+					total += value
+					if selected < total {
+						switch i {
+						case 0:
+							nextY = (y + 1) % 8
+						case 1:
+							nextX = (x + 1) % 256
+						case 2:
+							nextY = (y + 8 - 1) % 8
+						case 3:
+							nextX = (x + 256 - 1) % 256
+						}
+						break
+					}
+				}
+				neurons[y*256+x].Iterate(1, neurons[nextY*256+nextX].Set)
+				x, y = nextX, nextY
+				count++
+			}
+			length = append(length, plotter.XY{X: float64(i), Y: float64(count)})
+			previous = symbol
+			fmt.Printf("%c", symbol)
+		}
+
+		{
+			p := plot.New()
+
+			p.Title.Text = "length vs iteration"
+			p.X.Label.Text = "iteration"
+			p.Y.Label.Text = "length"
+
+			scatter, err := plotter.NewScatter(length)
+			if err != nil {
+				panic(err)
+			}
+			scatter.GlyphStyle.Radius = vg.Length(1)
+			scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+			p.Add(scatter)
+
+			err = p.Save(8*vg.Inch, 8*vg.Inch, "trace.png")
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		return
+	}
 	for _, symbol := range books[0].Text[:8*1024] {
 		x, y := int(symbol), 0
 		for range 1024 {
