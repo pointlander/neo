@@ -270,6 +270,50 @@ func (n *Neuron) Histogram() [4]int {
 	return counts
 }
 
+// Network is a neural network
+type Network []Neuron
+
+// NewNetwork creates a new network
+func NewNetwork(size int) Network {
+	neurons := make(Network, size)
+	for i := range neurons {
+		neurons[i] = NewNeuron(int64(i+1), 33, 33)
+	}
+	return neurons
+}
+
+// LoadNetwork load a network from file
+func LoadNetwork(file string) Network {
+	input, err := os.Open(file)
+	if err != nil {
+		panic(err)
+	}
+	defer input.Close()
+	decoder := gob.NewDecoder(input)
+	var neurons []Neuron
+	err = decoder.Decode(&neurons)
+	if err != nil {
+		panic(err)
+	}
+	for i := range neurons {
+		neurons[i].rng = rand.New(rand.NewSource(int64(i + 1)))
+	}
+	return neurons
+}
+
+func (n Network) SaveNetwork(file string) {
+	output, err := os.Create(file)
+	if err != nil {
+		panic(err)
+	}
+	defer output.Close()
+	encoder := gob.NewEncoder(output)
+	err = encoder.Encode(n)
+	if err != nil {
+		panic(err)
+	}
+}
+
 var (
 	// FlagInfer inference mode
 	FlagInfer = flag.String("infer", "", "inference mode")
@@ -280,21 +324,7 @@ func main() {
 
 	if *FlagInfer != "" {
 		rng := rand.New(rand.NewSource(1))
-		input, err := os.Open(*FlagInfer)
-		if err != nil {
-			panic(err)
-		}
-		defer input.Close()
-		decoder := gob.NewDecoder(input)
-		var neurons []Neuron
-		err = decoder.Decode(&neurons)
-		if err != nil {
-			panic(err)
-		}
-		for i := range neurons {
-			neurons[i].rng = rand.New(rand.NewSource(int64(i + 1)))
-		}
-
+		neurons := LoadNetwork(*FlagInfer)
 		infer := func(in byte) {
 			fmt.Println("----------------------------------------")
 			distribution := make([]int, 256)
@@ -337,10 +367,7 @@ func main() {
 
 	rng := rand.New(rand.NewSource(1))
 	books := LoadBooks()
-	neurons := make([]Neuron, 256*8)
-	for i := range neurons {
-		neurons[i] = NewNeuron(int64(i+1), 33, 33)
-	}
+	neurons := NewNetwork(256 * 8)
 	for _, symbol := range books[0].Text[:8*1024] {
 		x, y := int(symbol), 0
 		for range 1024 {
@@ -399,14 +426,5 @@ func main() {
 	for key, value := range distribution {
 		fmt.Println(key, value)
 	}
-	output, err := os.Create("network.gob")
-	if err != nil {
-		panic(err)
-	}
-	defer output.Close()
-	encoder := gob.NewEncoder(output)
-	err = encoder.Encode(neurons)
-	if err != nil {
-		panic(err)
-	}
+	neurons.SaveNetwork("network.gob")
 }
