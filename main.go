@@ -174,7 +174,7 @@ func NewNeuron(seed int64, rows, cols int) Neuron {
 
 // Iterate iterates the neuron
 func (n *Neuron) Iterate(iterations int, y *tf64.Set) {
-	const Eta = 1e-1
+	const Eta = 1e-2
 	drop := .3
 	dropout := map[string]interface{}{
 		"rng":  n.rng,
@@ -374,11 +374,11 @@ func main() {
 
 	rng := rand.New(rand.NewSource(1))
 	books := LoadBooks()
-	neurons := NewNetwork(256 * 8)
 	if *FlagObjective {
+		neurons := NewNetwork(256 * 33)
 		previous := byte(0)
 		length := make(plotter.XYs, 0, 8)
-		for i, symbol := range books[0].Text[:2*1024] {
+		for i, symbol := range books[0].Text[:8*1024] {
 			x, y, count := int(previous), 0, 0
 			for byte(x) != symbol {
 				nextX, nextY := x, y
@@ -432,6 +432,7 @@ func main() {
 
 		return
 	}
+	neurons := NewNetwork(256 * 8)
 	for _, symbol := range books[0].Text[:8*1024] {
 		x, y := int(symbol), 0
 		for range 1024 {
