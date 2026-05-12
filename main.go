@@ -29,8 +29,6 @@ const (
 	B1 = 0.8
 	// B2 exponential decay rate for the second-moment estimates
 	B2 = 0.89
-	// Eta is the learning rate
-	Eta = 1.0e-3
 )
 
 const (
@@ -173,8 +171,7 @@ func NewNeuron(seed int64, rows, cols int) Neuron {
 }
 
 // Iterate iterates the neuron
-func (n *Neuron) Iterate(iterations int, y *tf64.Set) {
-	const Eta = 1e-2
+func (n *Neuron) Iterate(iterations int, Eta float64, y *tf64.Set) {
 	drop := .3
 	dropout := map[string]interface{}{
 		"rng":  n.rng,
@@ -359,7 +356,7 @@ func main() {
 				if nextY == 0 {
 					distribution[nextX]++
 				}
-				neurons[y*256+x].Iterate(1, neurons[nextY*256+nextX].Set)
+				neurons[y*256+x].Iterate(1, 1e-1, neurons[nextY*256+nextX].Set)
 				x, y = nextX, nextY
 			}
 			for key, value := range distribution {
@@ -400,7 +397,7 @@ func main() {
 						break
 					}
 				}
-				neurons[y*256+x].Iterate(1, neurons[nextY*256+nextX].Set)
+				neurons[y*256+x].Iterate(1, 1e-2, neurons[nextY*256+nextX].Set)
 				x, y = nextX, nextY
 				count++
 			}
@@ -455,7 +452,7 @@ func main() {
 					break
 				}
 			}
-			neurons[y*256+x].Iterate(1, neurons[nextY*256+nextX].Set)
+			neurons[y*256+x].Iterate(1, 1e-1, neurons[nextY*256+nextX].Set)
 			x, y = nextX, nextY
 		}
 		fmt.Printf("%c", symbol)
@@ -485,7 +482,7 @@ func main() {
 		if nextY == 0 {
 			distribution[nextX]++
 		}
-		neurons[y*256+x].Iterate(1, neurons[nextY*256+nextX].Set)
+		neurons[y*256+x].Iterate(1, 1e-1, neurons[nextY*256+nextX].Set)
 		x, y = nextX, nextY
 	}
 	for key, value := range distribution {
